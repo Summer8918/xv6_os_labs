@@ -196,7 +196,7 @@ UPROGS=\
 	$U/_sleep\
 	$U/_pingpong\
 	$U/_zombie\
-
+    $U/_primes\
 
 
 
