@@ -1,0 +1,98 @@
+In another terminal (or tmux/split window), start GDB and load the kernel symbol file: 
+  riscv64-unknown-elf-gdb kernel/kernel / riscv64-unknown-elf-gdb --tui kernel/kernel
+TUI means TUI (Text User Interface).
+
+Then connect to QEMU: target remote :26000
+
+The debug mechanism of GDB (GNU Debugger) is based on low-level process control provided 
+by the operating system and the symbolic information compiled into your programs. It 
+works by intercepting and controlling the execution of a program, reading/modifying 
+its memory, and mapping machine instructions back to source code through debug symbols.
+
+Key Components of GDB’s Debugging Mechanism
+1. Debugging Symbols (DWARF, stabs)
+When you compile a program with the -g flag (e.g., gcc -g), the compiler includes 
+debugging information (e.g., variable names, function names, line numbers) in the executable.
+
+GDB reads this symbol table to map machine code addresses to source-level constructs (files, lines, variables).
+
+Without this, GDB can only debug at the raw assembly level.
+
+2. Process Control (ptrace)
+On Linux/Unix, GDB uses the ptrace system call to control the execution of another process (or the same program 
+started under GDB).
+
+This allows GDB to:
+Start/stop the process.
+Inspect or modify registers and memory.
+Set breakpoints by inserting special trap instructions (INT 3 on x86) into the process’s memory.
+
+3 Breakpoints and Watchpoints
+Breakpoints: GDB replaces an instruction at a given address with a software interrupt. When the CPU hits
+that instruction, it triggers a trap, and GDB takes control.
+
+Watchpoints: GDB can watch a specific memory address for reads/writes, using either:
+  CPU debug registers (hardware watchpoints).
+  Software checks (slower).
+
+4. Single Stepping
+GDB can single-step through instructions by:
+  Using the CPU's single-step mode (if supported).
+  Temporarily setting breakpoints at the next instruction(s).
+
+5. Stack Unwinding
+GDB uses the current program counter (PC), stack pointer (SP), and frame pointer (FP) to walk through 
+stack frames, reconstructing the call chain (for backtrace).
+
+It reads function boundaries and local variable locations from the debug information (e.g., DWARF).
+
+6. Remote Debugging (e.g., QEMU or Embedded Targets)
+When debugging a kernel, QEMU, or remote embedded device, GDB communicates via the GDB remote serial protocol (RSP).
+Example:
+make qemu-gdb launches QEMU in GDB stub mode (-s -S), listening on TCP port :26000.
+GDB connects to it with target remote :26000.
+All the same ptrace-like operations (breakpoints, memory inspection) are forwarded over TCP.
+
+7. Inspecting and Modifying Memory/Registers
+GDB can read/write process memory and registers via:
+  ptrace calls for local debugging.
+  Remote protocol commands for external targets.
+  This allows debugging, patching values, or even modifying program behavior on the fly.
+
+Questions:
+1 Looking at the backtrace output, which function called syscall?
+usertrap called syscall.
+
+2 What is the value of p->trapframe->a7 and what does that value represent? (Hint: look user/initcode.S, the first user program xv6 starts.)
+Is 0x7, 7 means SYS_exec, it is a System call numbers, (#define SYS_exec    7).
+
+3 What was the previous mode that the CPU was in?
+The value of sstatus reg is 0x200000022. 
+The sstatus register is the Supervisor Status Register.
+It holds control and status bits relevant to the supervisor privilege level (S-mode). These bits affect 
+interrupt enabling, previous privilege, and memory access behavior.
+8	SPP	Supervisor Previous Privilege: 1 = S-mode, 0 = U-mode (used during traps to remember prior mode)
+
+The 8 bit of sstatus reg is 0, so the previous mode that the CPU was is U-mode
+
+Write down the assembly instruction the kernel is panicing at. Which register corresponds to the variable num?
+The kernel is panicing at " 80001c1e:	00002683          	lw	a3,0(zero) # 0 <_entry-0x80000000>".
+
+"lw a3, 0" this loads the value from address 0 into register a3.
+
+Why does the kernel crash? Hint: look at figure 3-3 in the text; is address 0 mapped in the kernel address space? 
+Is that confirmed by the value in scause above? (See description of scause in RISC-V privileged instructions)
+scause=0xd sepc=0x80001c1e stval=0x0
+Address 0 is not mapped in the kernel space. Yes.
+
+stval register stands for Supervisor Trap Value Register
+(full name: sbadaddr in older specs)
+
+It provides additional information about the cause of a trap, usually the faulting virtual address when 
+there's a page fault or access violation.
+
+What is the name of the process that was running when the kernel paniced? What is its process id (pid)?
+It is $1 = "initcode\000\000\000\000\000\000\000".
+Pid = 2.
+
+
