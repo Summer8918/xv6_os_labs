@@ -296,6 +296,8 @@ fork(void)
   }
   np->sz = p->sz;
 
+  
+
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
 
@@ -311,7 +313,8 @@ fork(void)
   safestrcpy(np->name, p->name, sizeof(p->name));
 
   pid = np->pid;
-
+  // copy parent's trace mask
+  np->trace_mask = p->trace_mask;
   release(&np->lock);
 
   acquire(&wait_lock);
